@@ -553,6 +553,8 @@ else
 	adl="no"
 fi
 
+PKG_CHECK_MODULES([CHECK], [check])
+
 BFG_DRIVER(,AlcheMist,scrypt,no,[
 	need_lowl_vcom=yes
 	has_asic=yes
@@ -1587,6 +1589,7 @@ AC_CONFIG_FILES([
 	x86_32/Makefile
 	ccan.bfg/Makefile
 	lib/Makefile
+	tests/Makefile
 	])
 
 if $use_udevrules; then

@@ -81,6 +81,7 @@
 #include "driver-cpu.h"
 #include "driver-opencl.h"
 #include "util.h"
+#include "bit_twidle.h"
 
 #ifdef USE_AVALON
 #include "driver-avalon.h"
@@ -94,10 +95,6 @@
 	#include <errno.h>
 	#include <fcntl.h>
 	#include <sys/wait.h>
-#endif
-
-#ifdef USE_SCRYPT
-#include "malgo/scrypt.h"
 #endif
 
 #if defined(USE_AVALON) || defined(USE_BITFORCE) || defined(USE_ICARUS) || defined(USE_MODMINER) || defined(USE_NANOFURY) || defined(USE_X6500) || defined(USE_ZTEX)
@@ -13476,9 +13473,6 @@ int main(int argc, char *argv[])
 		test_intrange();
 		test_decimal_width();
 		test_domain_funcs();
-#ifdef USE_SCRYPT
-		test_scrypt();
-#endif
 		test_target();
 		test_uri_get_param();
 		utf8_test();

@@ -10,7 +10,7 @@
  */
 
 #include "config.h"
-#include "miner.h"
+#include "mining_algorithm.h"
 
 #include <math.h>
 #include <stdlib.h>

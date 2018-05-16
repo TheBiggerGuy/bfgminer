@@ -20,7 +20,7 @@
 #include <string.h>
 
 #include "driver-cpu.h"
-#include "miner.h"
+#include "bit_twidle.h"
 
 typedef uint32_t u32;
 typedef uint8_t u8;

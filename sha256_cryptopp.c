@@ -19,7 +19,7 @@
 #include <stdio.h>
 
 #include "driver-cpu.h"
-#include "miner.h"
+#include "bit_twidle.h"
 
 typedef uint32_t word32;
 

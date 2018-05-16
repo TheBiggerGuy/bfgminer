@@ -46,6 +46,8 @@
 
 #include "logging.h"
 #include "util.h"
+#include "malgo/mining_algorithm.h"
+#include "work.h"
 
 extern const char * const bfgminer_name_space_ver;
 extern const char * const bfgminer_name_slash_ver;
@@ -117,31 +119,6 @@ static inline int fsync (int fd)
   #include "libbitfury.h"
 #endif
 
-#ifdef HAVE_BYTESWAP_H
-#include <byteswap.h>
-#endif
-#ifdef HAVE_ENDIAN_H
-#include <endian.h>
-#endif
-#ifdef HAVE_SYS_ENDIAN_H
-#include <sys/endian.h>
-#endif
-#ifdef HAVE_LIBKERN_OSBYTEORDER_H
-#include <libkern/OSByteOrder.h>
-#endif
-#ifndef bswap_16
-#define	bswap_16(value)  \
- 	((((value) & 0xff) << 8) | ((value) >> 8))
-
-#define	bswap_32(value)	\
- 	(((uint32_t)bswap_16((uint16_t)((value) & 0xffff)) << 16) | \
- 	(uint32_t)bswap_16((uint16_t)((value) >> 16)))
-
-#define	bswap_64(value)	\
- 	(((uint64_t)bswap_32((uint32_t)((value) & 0xffffffff)) \
- 	    << 32) | \
- 	(uint64_t)bswap_32((uint32_t)((value) >> 32)))
-#endif
 
 /* This assumes htobe32 is a macro and that if it doesn't exist, then the
  * also won't exist */
@@ -173,19 +150,6 @@ static inline int fsync (int fd)
 
 #ifndef max
 #  define max(a, b)  ((a) > (b) ? (a) : (b))
-#endif
-
-#undef unlikely
-#undef likely
-#if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
-#define unlikely(expr) (__builtin_expect(!!(expr), 0))
-#define likely(expr) (__builtin_expect(!!(expr), 1))
-#else
-#define unlikely(expr) (expr)
-#define likely(expr) (expr)
-#endif
-#ifndef __maybe_unused
-#define __maybe_unused		__attribute__((unused))
 #endif
 
 #define uninitialised_var(x) x = x
@@ -280,22 +244,8 @@ struct gpu_adl {
 };
 #endif
 
-enum pow_algorithm {
-#ifdef USE_KECCAK
-	POW_KECCAK,
-#endif
-#ifdef USE_SHA256D
-	POW_SHA256D,
-#endif
-#ifdef USE_SCRYPT
-	POW_SCRYPT,
-#endif
-	POW_ALGORITHM_COUNT,
-};
-
 struct api_data;
 struct thr_info;
-struct work;
 struct lowlevel_device_info;
 
 enum bfg_probe_result_flags_values {
@@ -703,91 +653,6 @@ struct bfg_loaded_configfile {
 extern struct bfg_loaded_configfile *bfg_loaded_configfiles;
 
 
-static inline uint32_t swab32(uint32_t v)
-{
-	return bswap_32(v);
-}
-
-static inline void swap256(void *dest_p, const void *src_p)
-{
-	uint32_t *dest = dest_p;
-	const uint32_t *src = src_p;
-
-	dest[0] = src[7];
-	dest[1] = src[6];
-	dest[2] = src[5];
-	dest[3] = src[4];
-	dest[4] = src[3];
-	dest[5] = src[2];
-	dest[6] = src[1];
-	dest[7] = src[0];
-}
-
-static inline void swap32yes(void*out, const void*in, size_t sz) {
-	size_t swapcounter = 0;
-	for (swapcounter = 0; swapcounter < sz; ++swapcounter)
-		(((uint32_t*)out)[swapcounter]) = swab32(((uint32_t*)in)[swapcounter]);
-}
-
-#define LOCAL_swap32(type, var, sz)  \
-	type __swapped_ ## var[sz * 4 / sizeof(type)];  \
-	swap32yes(__swapped_ ## var, var, sz);  \
-	var = __swapped_ ## var;  \
-// end
-
-#ifdef WORDS_BIGENDIAN
-#  define swap32tobe(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, (sz)*4))
-#  define LOCAL_swap32be(type, var, sz)  ;
-#  define swap32tole(out, in, sz)  swap32yes(out, in, sz)
-#  define LOCAL_swap32le(type, var, sz)  LOCAL_swap32(type, var, sz)
-#else
-#  define swap32tobe(out, in, sz)  swap32yes(out, in, sz)
-#  define LOCAL_swap32be(type, var, sz)  LOCAL_swap32(type, var, sz)
-#  define swap32tole(out, in, sz)  ((out == in) ? (void)0 : (void)memmove(out, in, (sz)*4))
-#  define LOCAL_swap32le(type, var, sz)  ;
-#endif
-
-static inline void swab256(void *dest_p, const void *src_p)
-{
-	uint32_t *dest = dest_p;
-	const uint32_t *src = src_p;
-
-	dest[0] = swab32(src[7]);
-	dest[1] = swab32(src[6]);
-	dest[2] = swab32(src[5]);
-	dest[3] = swab32(src[4]);
-	dest[4] = swab32(src[3]);
-	dest[5] = swab32(src[2]);
-	dest[6] = swab32(src[1]);
-	dest[7] = swab32(src[0]);
-}
-
-static inline
-void bswap_96p(void * const dest_p, const void * const src_p)
-{
-	uint32_t * const dest = dest_p;
-	const uint32_t * const src = src_p;
-	
-	dest[0] = bswap_32(src[2]);
-	dest[1] = bswap_32(src[1]);
-	dest[2] = bswap_32(src[0]);
-}
-
-static inline
-void bswap_32mult(void * const dest_p, const void * const src_p, const size_t sz)
-{
-	const uint32_t *s = src_p;
-	const uint32_t *s_end = &s[sz];
-	uint32_t *d = dest_p;
-	d = &d[sz - 1];
-	
-	for ( ; s < s_end; ++s, --d)
-		*d = bswap_32(*s);
-}
-
-#define flip12(dest_p, src_p) swap32yes(dest_p, src_p, 12 / 4)
-#define flip32(dest_p, src_p) swap32yes(dest_p, src_p, 32 / 4)
-
 #define WATCHDOG_INTERVAL  2
 extern void bfg_watchdog(struct cgpu_info *, struct timeval *tvp_now);
 
@@ -1142,35 +1007,6 @@ struct blockchain_info {
 
 struct _clState;
 struct cgpu_info;
-struct mining_algorithm;
-
-struct mining_algorithm {
-	const char *name;
-	const char *aliases;
-	
-	enum pow_algorithm algo;
-	uint8_t ui_skip_hash_bytes;
-	uint8_t worktime_skip_prevblk_u32;
-	float reasonable_low_nonce_diff;
-	
-	void (*hash_data_f)(void *digest, const void *data);
-	
-	int goal_refs;
-	int staged;
-	int base_queue;
-	
-	struct mining_algorithm *next;
-	
-#ifdef USE_OPENCL
-	bool opencl_nodefault;
-	float (*opencl_oclthreads_to_intensity)(unsigned long oclthreads);
-	unsigned long (*opencl_intensity_to_oclthreads)(float intensity);
-	unsigned long opencl_min_oclthreads;
-	unsigned long opencl_max_oclthreads;
-	float opencl_min_nonce_diff;
-	char *(*opencl_get_default_kernel_file)(const struct mining_algorithm *, struct cgpu_info *, struct _clState *);
-#endif
-};
 
 struct mining_goal_info {
 	unsigned id;
@@ -1267,14 +1103,6 @@ struct bfg_tmpl_ref {
 	blktemplate_t *tmpl;
 	int refcount;
 	pthread_mutex_t mutex;
-};
-
-struct ntime_roll_limits {
-	uint32_t min;
-	uint32_t max;
-	struct timeval tv_ref;
-	int16_t minoff;
-	int16_t maxoff;
 };
 
 struct stratum_work {
@@ -1461,80 +1289,7 @@ struct pool {
 #define GETWORK_MODE_STRATUM 'S'
 #define GETWORK_MODE_GBT 'G'
 
-typedef unsigned work_device_id_t;
 #define PRIwdi "04x"
-
-struct work {
-	unsigned char	data[128];
-	unsigned char	midstate[32];
-	unsigned char	target[32];
-	unsigned char	hash[32];
-
-	double share_diff;
-
-	int		rolls;
-	struct ntime_roll_limits ntime_roll_limits;
-
-	struct {
-		uint32_t nonce;
-	} blk;
-
-	struct thr_info	*thr;
-	int		thr_id;
-	struct pool	*pool;
-	struct timeval	tv_staged;
-
-	bool		mined;
-	bool		clone;
-	bool		cloned;
-	int		rolltime;
-	bool		longpoll;
-	bool		stale;
-	bool		mandatory;
-	bool spare;
-	bool		block;
-
-	bool		stratum;
-	char 		*job_id;
-	bytes_t		nonce2;
-	char		*nonce1;
-
-	unsigned char	work_restart_id;
-	int		id;
-	work_device_id_t device_id;
-	UT_hash_handle hh;
-	
-	// Please don't use this if it's at all possible, I'd like to get rid of it eventually.
-	void *device_data;
-	void *(*device_data_dup_func)(struct work *);
-	void (*device_data_free_func)(struct work *);
-	
-	double		work_difficulty;
-	float		nonce_diff;
-
-	// Allow devices to identify work if multiple sub-devices
-	// DEPRECATED: New code should be using multiple processors instead
-	int		subid;
-	
-	// Allow devices to timestamp work for their own purposes
-	struct timeval	tv_stamp;
-
-	struct bfg_tmpl_ref *tr;
-	unsigned int	dataid;
-	bool		do_foreign_submit;
-
-	struct timeval	tv_getwork;
-	time_t		ts_getwork;
-	struct timeval	tv_getwork_reply;
-	struct timeval	tv_cloned;
-	struct timeval	tv_work_start;
-	struct timeval	tv_work_found;
-	char		getwork_mode;
-
-	/* Used to queue shares in submit_waiting */
-	struct work *prev;
-	struct work *next;
-};
 
 extern void get_datestamp(char *, size_t, time_t);
 #define get_now_datestamp(buf, bufsz)  get_datestamp(buf, bufsz, INVALID_TIMESTAMP)

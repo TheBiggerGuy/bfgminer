@@ -27,15 +27,15 @@ dist_rpcexamples_DATA = \
 		  api-example.c \
                   api-example.py
 
-SUBDIRS		= lib ccan.bfg
+SUBDIRS		= lib ccan.bfg . tests
 
-# Without a redirected rule, code depending on different lib/*.h files may try to build dependencies of that in parallel, which can fail
-lib/%: lib_directory
-	@test -e $@
-lib_directory:
-	$(MAKE) -C lib
-ccan.bfg/libccan.a:
-	$(MAKE) -C ccan.bfg $*
+### # Without a redirected rule, code depending on different lib/*.h files may try to build dependencies of that in parallel, which can fail
+### lib/%: lib_directory
+### 	@test -e $@
+### lib_directory:
+### 	$(MAKE) -C lib
+### ccan.bfg/libccan.a:
+### 	$(MAKE) -C ccan.bfg $*
 
 INCLUDES	= -fno-strict-aliasing
 
@@ -51,7 +51,7 @@ endif
 # first, our own stuff
 bfgminer_LDADD    = lib/libgnu.a ccan.bfg/libccan.a
 bfgminer_LDFLAGS  =
-bfgminer_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib -I$(top_srcdir)/ccan-upstream
+bfgminer_CPPFLAGS = $(CPPFLAGS) -I$(top_builddir)/lib -I$(top_srcdir)/lib -I$(top_srcdir)/ccan-upstream
 
 # second, potentially embedded libs
 bfgminer_LDADD    += $(libbase58_LIBS)   $(libblkmaker_LIBS)
@@ -82,13 +82,6 @@ bfgminer_SOURCES += miner.h compat.h  \
 		   util.c util.h logging.h		\
 		   sha2.c sha2.h api.c
 EXTRA_bfgminer_DEPENDENCIES =
-
-TESTS = test-bfgminer.sh
-EXTRA_DIST += test-bfgminer.sh
-SH_LOG_COMPILER = /bin/sh
-AM_TESTS_ENVIRONMENT = PATH='$(srcdir)':"$$PATH"; export PATH;
-TESTS_ENVIRONMENT = $(AM_TESTS_ENVIRONMENT)
-TEST_EXTENSIONS = .sh
 
 .PHONY: update-version
 update-version:
@@ -205,7 +198,7 @@ endif # USE_CPUMINING
 endif # USE_SHA256D
 
 if USE_SCRYPT
-bfgminer_SOURCES += malgo/scrypt.c malgo/scrypt.h
+bfgminer_SOURCES += malgo/scrypt.c
 dist_doc_DATA += README.scrypt
 
 if USE_OPENCL

@@ -15,9 +15,10 @@
 #include <uthash.h>
 
 #include "logging.h"
-#include "miner.h"
+#include "mining_algorithm.h"
 #include "ocl.h"
 #include "util.h"
+#include "bit_twidle.h"
 
 static
 void hash_data(void *out_hash, const void *data)

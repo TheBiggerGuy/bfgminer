@@ -841,4 +841,19 @@ extern uint16_t crc16(const void *, size_t, uint16_t init);
 #define crc16ffff(  DATA, SZ)  crc16(DATA, SZ, 0xffff)
 #define crc16xmodem(DATA, SZ)  crc16(DATA, SZ, 0)
 
+void bin2hex(char *out, const void *in, size_t len);
+
+#undef unlikely
+#undef likely
+#if defined(__GNUC__) && (__GNUC__ > 2) && defined(__OPTIMIZE__)
+#define unlikely(expr) (__builtin_expect(!!(expr), 0))
+#define likely(expr) (__builtin_expect(!!(expr), 1))
+#else
+#define unlikely(expr) (expr)
+#define likely(expr) (expr)
+#endif
+#ifndef __maybe_unused
+#define __maybe_unused		__attribute__((unused))
+#endif
+
 #endif /* __UTIL_H__ */
